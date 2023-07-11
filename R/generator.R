@@ -5,6 +5,26 @@ library(AOI)
 library(ggplot2)
 library(dplyr)
 library(terra)
+library(climateR)
+####################################################
+# ---- Santa Barbara Area polygons/lines/points ----
+####################################################
+ca <- AOI::aoi_get(state = "CA")  %>%
+  dplyr::select(state = name, geometry)
+plot(ca$geometry)
+
+sf::write_sf(ca, "data/california_polygon.gpkg")
+
+conus <- AOI::aoi_get("CONUS")  %>%
+  dplyr::select(state = name, geometry)
+plot(ca$geometry)
+
+sf::write_sf(ca, "data/california_polygon.gpkg")
+
+ts  = getGridMET(geocode('Fort Collins', pt = TRUE),
+                 varname =  c("pr", 'srad'),
+                 startDate = "2021-01-01",
+                 endDate = "2021-12-31")
 ####################################################
 # ---- Santa Barbara Area polygons/lines/points ----
 ####################################################
@@ -121,10 +141,97 @@ r_pts <- raster::raster(r_tpt)
 
 mapview::mapview(rr) + fline + catch + outs + r_pts
 
+# CONUS GRIDMET 1 day
+
+conus <- AOI::aoi_get("CONUS")
+conus$geometry %>% plot()
+mapview::mapview(conus)
+514*16500
+ggg <- climateR::getGridMET(AOI = conus,
+                            varname = "pr",
+                            startDate = "2018-01-08",
+                            endDate = "2018-01-08"
+                            )
+ggg$precipitation_amount %>% plot()
+object.size(ggg)
+
+terra::writeRaster(ggg$precipitation_amount, filename = "D:/test.tif")
+# --------------------------
+# ---- TEST NETCDF in R ----
+# --------------------------
+AOI     = aoi_get(state = "CA")
+(extent = st_bbox(AOI))
+(crs    = st_crs(AOI)$proj4string)
+
+catolgue = "http://thredds.northwestknowledge.net:8080/thredds/dodsC/"
+cdm = "agg_met_pr_1979_CurrentYear_CONUS.nc"
+url = paste0(catolgue, cdm, "#fillmismatch")
+(nc   = RNetCDF::open.nc(url))
+X    = RNetCDF::var.get.nc(nc, "lon")
+Y    = RNetCDF::var.get.nc(nc, "lat")
+time = RNetCDF::var.get.nc(nc, "day")
+(xmin = which.min(abs(sort(X) - extent$xmin)) - 1)
+(xmax = which.min(abs(sort(X) - extent$xmax)) - 1)
+(ymin = which.min(abs(sort(Y) - extent$ymin)) - 1)
+(ymax = which.min(abs(sort(Y) - extent$ymax)) - 1)
+
+time = as.Date("2018-01-19") - as.Date("1979-01-01")
+
+url = paste0(
+  catolgue,
+  cdm,
+  "?precipitation_amount",
+  "[", time, ":1:", time, "]",
+  "[", ymin, ":1:", ymax, "]",
+  "[", xmin, ":1:", xmax, "]",
+  "#fillmismatch")
+(nc    = RNetCDF::open.nc(url))
+
+library(RNetCDF)
+RNetCDF::print.nc(nc)
+RNetCDF::var.get.nc(nc, "lat")
+rain  = RNetCDF::var.get.nc(nc, "precipitation_amount", unpack = TRUE)
+rr <- raster::raster(rain)
 
 
+plot(rr$layer)
 
+rain = raster(t(rain))
+crs(rain) = crs
+extent(rain) = extent(c(X[xmin], X[xmax], Y[ymax], Y[ymin]))
+plot(rain$layer)
+nc.plot()
+dim(t(rain))
+dim(rain)
+library(raster)
+rain = raster(t(rain))
 
+crs(rain) = "+proj=longlat +a=6378137 +f=0.00335281066474748 +pm=0 +no_defs"
+extent(rain) = extent(c(X[xmin], X[xmax], Y[ymax], Y[ymin]))
+
+########################
+# ---- Testing AOIS ----
+########################
+# nldas <- climateR::params %>%
+#   dplyr::filter(id == "NLDAS")
+bad1 <- sf::read_sf("C:/Users/angus/Downloads/natomas/natomas.shp")
+
+bad2 <- sf::read_sf("D:/climatePy_test_data/single_polygon_wgs84.gpkg")
+
+good1 <- sf::read_sf("C:/Users/angus/OneDrive/Desktop/github/climatedata_slideshow/data/santa_barbara_polygon.gpkg")
+
+plot(bad1$geometry)
+mapview::mapview(bad1)
+mapview::mapview(bad2) + bad1 +good1
+mapview::mapview(bad1) + bad2 + good1
+
+bad1 %>% sf::st_is_valid()
+bad2 %>% sf::st_is_valid()
+good1 %>% sf::st_is_valid()
+
+table(sf::st_geometry_type(bad1))
+table(sf::st_geometry_type(bad2))
+table(sf::st_geometry_type(good1))
 
 
 
